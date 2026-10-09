@@ -1,3 +1,12 @@
+# Unreleased
+
+## Authorize first, capture from Thelia
+- Requires Thelia 3.4: the module implements `Thelia\Module\PaymentModuleWithCaptureInterface` and writes Thelia's payment journal.
+- With manual validation ("Payment validation": manual), the module authorizes first. The authorization is written to Thelia's payment journal and the order moves to "Awaiting capture", no longer to "Paid": a host module that went on from the paid status on an authorization now goes on from the capture. The capture, in full or in part, is made from Thelia's capture dialog or admin API (`Transaction/Update` with `manualValidation: NO`, under the order lock); its outcome comes with PayZen's notification, which settles the journal line and pays the order. PayZen takes a single capture per authorization: the rest is written as released. A platform refusal settles the line as failed; a call without answer leaves it pending until the notification.
+- Cancelling the order releases the authorization at PayZen (`Transaction/CancelOrRefund`). An authorization cancelled or expired at PayZen, and a refused payment with the bank's code and message, are written to the journal. Notifications and history refreshes write the journal once: a replay writes nothing twice.
+- On the order page, the module's update form only sets the capture date when the module authorizes first; the amount and the validation are no longer taken from it, even from a request built by hand.
+- With automatic validation, nothing changes.
+
 # 3.8.1
 
 - An amount the shop computes is converted to the smallest unit of the currency without depending on the PHP version. On PHP 8.4, a total on a half cent (1.005, a unit price below a cent sold by weight) was read as 100 cents instead of 101, and the payment, the capture and the refund took one cent less. The conversion now reads the decimal expansion of the amount and rounds the half up, on PHP 8.3 and 8.4 alike.
