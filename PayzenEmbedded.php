@@ -18,6 +18,7 @@ use PayzenEmbedded\LyraClient\LyraTokenGateway;
 use PayzenEmbedded\Service\LegacyTokenCanceller;
 use PayzenEmbedded\Service\StoredMethodContract;
 use PayzenEmbedded\Service\StoredMethodRevoker;
+use PayzenEmbedded\Service\DeferredCapture;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
@@ -37,11 +38,14 @@ use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
+use Thelia\Domain\Payment\DTO\PaymentOperationResult;
 use Thelia\Model\Order;
+use Thelia\Model\OrderPaymentTransaction;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BalanceChargingPaymentModuleInterface;
 use Thelia\Module\BaseModule;
 use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
+use Thelia\Module\PaymentModuleWithCaptureInterface;
 use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
 /**
@@ -49,7 +53,7 @@ use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
  * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
  * PayZen registered among the payment methods of the shop.
  */
-class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleWithCaptureInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -150,6 +154,21 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
     public static function authorizesFirst(): bool
     {
         return 'YES' === self::getConfigValue('validation_mode', '');
+    }
+
+    public function supportsDeferredCapture(): bool
+    {
+        return self::authorizesFirst();
+    }
+
+    public function capture(Order $order, float $amount, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
+    }
+
+    public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->release($order, $transaction);
     }
 
     public function pay(Order $order): ?Response
