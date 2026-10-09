@@ -63,6 +63,9 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
     /** The transaction refund event identifier, see Event\TransactionRefundEvent */
     const TRANSACTION_REFUND_EVENT = "payzenembedded.transaction_refund_event";
 
+    /** A transaction the platform reported was recorded, see Event\TransactionReportedEvent */
+    const TRANSACTION_REPORTED_EVENT = "payzenembedded.transaction_reported_event";
+
     /** Payment form types, see the form_type configuration variable */
     const FORM_TYPE_CARD = 'CARD';
     const FORM_TYPE_SMART_FORM = 'SMART_FORM';
@@ -138,6 +141,15 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
     public function supportsStoredMethods(): bool
     {
         return (bool) self::getConfigValue('allow_one_click_payments');
+    }
+
+    /**
+     * Whether the shop authorizes first and captures later: the validation mode is manual, so the
+     * platform holds the amount until the shop validates it, from Thelia's capture dialog.
+     */
+    public static function authorizesFirst(): bool
+    {
+        return 'YES' === self::getConfigValue('validation_mode', '');
     }
 
     public function pay(Order $order): ?Response
