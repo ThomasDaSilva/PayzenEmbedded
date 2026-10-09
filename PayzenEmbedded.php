@@ -41,6 +41,7 @@ use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Domain\Payment\DTO\PaymentOperationResult;
+use Thelia\Domain\Payment\Enum\RefundReason;
 use Thelia\Model\Order;
 use Thelia\Model\OrderPaymentTransaction;
 use Thelia\Model\OrderPaymentTransactionQuery;
@@ -54,6 +55,7 @@ use Thelia\Module\BaseModule;
 use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
 use Thelia\Module\PaymentModuleCancellingOnReleaseInterface;
 use Thelia\Module\PaymentModuleCapturingOnceInterface;
+use Thelia\Module\PaymentModuleWithRefundInterface;
 use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
 /**
@@ -61,7 +63,7 @@ use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
  * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
  * PayZen registered among the payment methods of the shop.
  */
-class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface, PaymentModuleWithRefundInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -252,6 +254,17 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
         }
 
         return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
+    }
+
+    /** PayZen gives money back on any payment it took, in full or in part. */
+    public function supportsRefund(): bool
+    {
+        return true;
+    }
+
+    public function refund(Order $order, float $amount, OrderPaymentTransaction $transaction, RefundReason $reason, ?string $comment): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->refund($order, $amount, $reason, $comment);
     }
 
     public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
