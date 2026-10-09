@@ -19,6 +19,11 @@
 - A capture PayZen answers with a status other than `SUCCESS` or `ERROR` stays pending until the notification: only `ERROR` is a refusal.
 - The cancel link of the payment page leaves an order PayZen paid or authorized as it is and sends the customer to the confirmation page; a visitor who is not signed in is sent to the login page, and a customer following the link of another customer's order gets a 403, where both got a server error.
 
+## Refund from Thelia
+- The module implements `Thelia\Module\PaymentModuleWithRefundInterface`: Thelia's refund dialog and admin API give money back through PayZen (`Transaction/CancelOrRefund`, as the module's own refund form does), with the reason and the merchant's comment written beside it in the PayZen back-office. The refund is filed in Thelia's payment journal under the uuid of the transaction PayZen made it with; one PayZen still processes is settled by its notification.
+- A refund made from the PayZen back-office, or refused there, is written to Thelia's payment journal by the notification, whatever the validation mode.
+- `LyraTransactionRefundWrapper::refundRecorded()` returns the outcome with that transaction; `refundTransaction()` is unchanged. `OrderStatusNotUpdatedException` carries the transaction too.
+
 # 3.7.2
 
 - A payment form of an overridden theme that still posts the refusal of PayZen (`kr-post-url-refused`) to `payzen_embedded_front_abort_payment` no longer ends on a 403. A POST to that route with no valid token that carries both `kr-answer` and `kr-hash` is answered as `payzen_embedded_front_payment_refused` answers: nothing is changed or dispatched, nothing is checked (the answer is not read, so neither is its hash), and the customer is sent to the failure page, whoever sends it. Any other POST without a valid token is still a 403, and a POST with a valid token cancels the order as before.
