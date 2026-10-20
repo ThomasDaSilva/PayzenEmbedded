@@ -256,13 +256,13 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
         return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
     }
 
-    /** PayZen gives money back on any payment it took, in full or in part. */
     /** A payment PayZen has not remitted yet is cancelled whole, never refunded in part. */
     public function refundsOnlyInFull(Order $order): bool
     {
         return (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
     }
 
+    /** PayZen gives money back on any payment it took, in full or in part. */
     public function supportsRefund(): bool
     {
         return true;
