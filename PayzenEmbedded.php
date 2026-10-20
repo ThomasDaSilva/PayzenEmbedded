@@ -55,7 +55,7 @@ use Thelia\Module\BaseModule;
 use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
 use Thelia\Module\PaymentModuleCancellingOnReleaseInterface;
 use Thelia\Module\PaymentModuleCapturingOnceInterface;
-use Thelia\Module\PaymentModuleWithRefundInterface;
+use Thelia\Module\PaymentModuleRefundingInFullInterface;
 use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
 /**
@@ -63,7 +63,7 @@ use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
  * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
  * PayZen registered among the payment methods of the shop.
  */
-class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface, PaymentModuleWithRefundInterface
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface, PaymentModuleRefundingInFullInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -257,6 +257,12 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
     }
 
     /** PayZen gives money back on any payment it took, in full or in part. */
+    /** A payment PayZen has not remitted yet is cancelled whole, never refunded in part. */
+    public function refundsOnlyInFull(Order $order): bool
+    {
+        return (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
+    }
+
     public function supportsRefund(): bool
     {
         return true;
