@@ -321,7 +321,7 @@ class FrontController extends BasePaymentModuleController
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId() || !$order->isNotPaid()) {
             $this->getLog()->addInfo(sprintf('Order %s is not a PayZen order waiting for its payment, its status is kept.', $order->getRef()));
 
-            if ($order->isPaid(false)) {
+            if ($order->isPaymentSecured()) {
                 $this->redirectToSuccessPage($orderId);
             }
 
