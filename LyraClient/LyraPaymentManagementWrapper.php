@@ -316,8 +316,17 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                         continue;
                     }
 
-                    $lastStatus = $this->processOrderStatus($order, $answer, true);
-                    $this->reportTransaction($order, $answer);
+                    // A cancelled or lapsed transaction reaches Thelia's journal before the order is
+                    // cancelled: the cancellation would otherwise find the authorization still held
+                    // and ask the platform to release it again. Any other moves the order first, as
+                    // the capture after picking expects.
+                    if ($incoming->isUnpaid()) {
+                        $this->reportTransaction($order, $answer);
+                        $lastStatus = $this->processOrderStatus($order, $answer, true);
+                    } else {
+                        $lastStatus = $this->processOrderStatus($order, $answer, true);
+                        $this->reportTransaction($order, $answer);
+                    }
                 }
 
                 $governing = $this->governingTransaction($order);
