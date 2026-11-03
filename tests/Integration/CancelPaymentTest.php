@@ -17,7 +17,9 @@ namespace PayzenEmbedded\Tests\Integration;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Thelia\Model\Customer;
 use Thelia\Model\Map\OrderTableMap;
+use Thelia\Model\Order;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatus;
 use Thelia\Test\FixtureFactory;
@@ -56,10 +58,15 @@ final class CancelPaymentTest extends WebIntegrationTestCase
 
     public function testTheCustomerCancelsAnOrderWhosePaymentIsOpen(): void
     {
-        $order = $this->factory->order();
+        $order = $this->payzenOrder();
         $this->injector->setCustomer($order->getCustomer());
 
-        $this->client->request('GET', '/payzen-embedded/cancel-payment/'.$order->getId());
+        $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf((int) $order->getId()), 'The link only asks to confirm.');
+
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => $this->tokenOfTheSession($order->getCustomer())]);
 
         self::assertSame(OrderStatus::CODE_CANCELED, $this->statusOf((int) $order->getId()));
     }
@@ -76,33 +83,85 @@ final class CancelPaymentTest extends WebIntegrationTestCase
     #[DataProvider('securedStatuses')]
     public function testAnOrderWhosePaymentWentThroughIsLeftAsItIs(string $statusCode): void
     {
-        $order = $this->factory->order(null, ['statusCode' => $statusCode]);
+        $order = $this->payzenOrder($statusCode);
         $this->injector->setCustomer($order->getCustomer());
 
-        $this->client->request('GET', '/payzen-embedded/cancel-payment/'.$order->getId());
+        $this->client->request('GET', $this->cancelUrl($order));
 
-        self::assertSame($statusCode, $this->statusOf((int) $order->getId()));
+        self::assertResponseRedirects();
+        self::assertSame($statusCode, $this->statusOf((int) $order->getId()), 'Following the link changes nothing.');
+
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => $this->tokenOfTheSession($order->getCustomer())]);
+
+        self::assertResponseRedirects();
+        self::assertSame($statusCode, $this->statusOf((int) $order->getId()), 'The confirmed POST leaves the order as it is.');
     }
 
     public function testAVisitorWhoIsNotSignedInCancelsNothing(): void
     {
-        $order = $this->factory->order();
+        $order = $this->payzenOrder();
 
-        $this->client->request('GET', '/payzen-embedded/cancel-payment/'.$order->getId());
+        $this->client->request('GET', $this->cancelUrl($order));
+        self::assertResponseStatusCodeSame(403);
 
-        self::assertTrue($this->client->getResponse()->isRedirect(), 'The visitor is sent to the login page.');
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => 'any']);
+        self::assertResponseStatusCodeSame(403);
+
         self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf((int) $order->getId()));
     }
 
     public function testACustomerCancelsNoOrderOfAnotherCustomer(): void
     {
-        $order = $this->factory->order();
-        $this->injector->setCustomer($this->factory->order()->getCustomer());
+        $order = $this->payzenOrder();
+        $other = $this->payzenOrder()->getCustomer();
+        $this->injector->setCustomer($other);
 
-        $this->client->request('GET', '/payzen-embedded/cancel-payment/'.$order->getId());
+        $this->client->request('GET', $this->cancelUrl($order));
+        self::assertResponseStatusCodeSame(403);
 
-        self::assertSame(403, $this->client->getResponse()->getStatusCode());
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => $this->tokenOfTheSession($other)]);
+        self::assertResponseStatusCodeSame(403);
+
         self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf((int) $order->getId()));
+    }
+
+    public function testAPostWithoutAValidTokenCancelsNothing(): void
+    {
+        $order = $this->payzenOrder();
+        $this->injector->setCustomer($order->getCustomer());
+
+        $this->client->request('POST', $this->cancelUrl($order));
+        self::assertResponseStatusCodeSame(403);
+
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => 'not-the-token-of-the-session']);
+        self::assertResponseStatusCodeSame(403);
+
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf((int) $order->getId()));
+    }
+
+    private function payzenOrder(string $statusCode = OrderStatus::CODE_NOT_PAID): Order
+    {
+        return $this->factory->order(null, ['statusCode' => $statusCode, 'paymentModuleCode' => 'PayzenEmbedded']);
+    }
+
+    private function cancelUrl(Order $order): string
+    {
+        return '/payzen-embedded/cancel-payment/'.$order->getId();
+    }
+
+    /**
+     * The token of the session of the customer, read from the form of the confirmation page of a throwaway order
+     * of theirs, as a browser holding that page would post it.
+     */
+    private function tokenOfTheSession(Customer $customer): string
+    {
+        $throwaway = $this->factory->order($customer, ['paymentModuleCode' => 'PayzenEmbedded']);
+        $crawler = $this->client->request('GET', $this->cancelUrl($throwaway));
+        $token = (string) $crawler->filter('form[method="post"] input[name="_token"]')->attr('value');
+
+        self::assertNotSame('', $token, 'The confirmation page carries the token of the session.');
+
+        return $token;
     }
 
     private function statusOf(int $orderId): string
