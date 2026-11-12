@@ -1,4 +1,4 @@
-# Unreleased
+# 3.9.0
 
 ## Authorize first, capture from Thelia
 - Requires Thelia 3.4: the module implements `Thelia\Module\PaymentModuleWithCaptureInterface` and writes Thelia's payment journal.
